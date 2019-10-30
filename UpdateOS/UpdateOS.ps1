@@ -57,7 +57,6 @@ Start-Transcript "$($env:ProgramData)\Microsoft\UpdateOS\UpdateOS.log"
 
 # Main logic
 $needReboot = $false
-Write-Host "Installing updates during white glove technician phase."
 
 # Load module from PowerShell Gallery
 Install-PackageProvider -Name NuGet -Force
