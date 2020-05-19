@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.0
+.VERSION 1.4
 
 .GUID 07e4ef9f-8341-4dc4-bc73-fc277eb6b4e6
 
@@ -25,6 +25,10 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
+Version 1.4:  Fixed reboot logic.
+Version 1.3:  Force use of Microsoft Update/WU.
+Version 1.2:  Updated to work on ARM64.
+Version 1.1:  Cleaned up output.
 Version 1.0:  Original published version.
 
 #>
@@ -38,11 +42,22 @@ This script uses the PSWindowsUpdate module to install the latest cumulative upd
 .\UpdateOS.ps1
 #>
 
-# If we are running as a 32-bit process on a 64-bit system, re-launch as a 64-bit process
-if (Test-Path "$($env:WINDIR)\SysNative\WindowsPowerShell\v1.0\powershell.exe")
+[CmdletBinding()]
+Param(
+    [Parameter(Mandatory=$False)] [Switch] $HardReboot = $false
+)
+
+Process
 {
-    & "$($env:WINDIR)\SysNative\WindowsPowerShell\v1.0\powershell.exe" -ExecutionPolicy bypass -NoProfile -File "$PSCommandPath"
-    Exit $lastexitcode
+
+# If we are running as a 32-bit process on an x64 system, re-launch as a 64-bit process
+if ("$env:PROCESSOR_ARCHITEW6432" -ne "ARM64")
+{
+    if (Test-Path "$($env:WINDIR)\SysNative\WindowsPowerShell\v1.0\powershell.exe")
+    {
+        & "$($env:WINDIR)\SysNative\WindowsPowerShell\v1.0\powershell.exe" -ExecutionPolicy bypass -NoProfile -File "$PSCommandPath"
+        Exit $lastexitcode
+    }
 }
 
 # Create a tag file just so Intune knows this was installed
@@ -57,27 +72,41 @@ Start-Transcript "$($env:ProgramData)\Microsoft\UpdateOS\UpdateOS.log"
 
 # Main logic
 $needReboot = $false
+Write-Host "Installing updates with HardReboot = $HardReboot."
 
 # Load module from PowerShell Gallery
-Install-PackageProvider -Name NuGet -Force
-Install-Module PSWindowsUpdate -Force
+$null = Install-PackageProvider -Name NuGet -Force
+$null = Install-Module PSWindowsUpdate -Force
 Import-Module PSWindowsUpdate
 
 # Install all available updates
-Get-WindowsUpdate -Install -IgnoreUserInput -AcceptAll -IgnoreReboot
-$needReboot = (Get-WUIsPendingReboot)
-
-# Stop logging
-Stop-Transcript
+Get-WindowsUpdate -Install -IgnoreUserInput -AcceptAll -WindowsUpdate -IgnoreReboot | Select Title, KB, Result | Format-Table
+$needReboot = (Get-WURebootStatus -Silent).RebootRequired
 
 # Specify return code
 if ($needReboot)
 {
-    Write-Host "Reboot is needed."
-    Exit 3010
-    # Exit 1641
+    Write-Host "Windows Update indicated that a reboot is needed."
 }
 else
 {
-    Exit 0
+    Write-Host "Windows Update indicated that no reboot is required."
+}
+
+# For whatever reason, the reboot needed flag is not always being properly set.  So we always want to force a reboot.
+# If this script (as an app) is being used as a dependent app, then a hard reboot is needed to get the "main" app to
+# install.
+if ($HardReboot)
+{
+    Write-Host "Exiting with return code 1641 to indicate a hard reboot is needed."
+    Stop-Transcript
+    Exit 1641
+}
+else
+{
+    Write-Host "Exiting with return code 3010 to indicate a soft reboot is needed."
+    Stop-Transcript
+    Exit 3010
+}
+
 }
