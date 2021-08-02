@@ -80,7 +80,7 @@ $null = Install-Module PSWindowsUpdate -Force
 Import-Module PSWindowsUpdate
 
 # Install all available updates
-Get-WindowsUpdate -Install -IgnoreUserInput -AcceptAll -WindowsUpdate -IgnoreReboot | Select Title, KB, Result | Format-Table
+Get-WindowsUpdate -Install -IgnoreUserInput -AcceptAll -WindowsUpdate -IgnoreReboot | Select-Object Title, KB, Result | Format-Table
 $needReboot = (Get-WURebootStatus -Silent).RebootRequired
 
 # Specify return code
