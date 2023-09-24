@@ -12,7 +12,6 @@ Specify the platforms and minimum OS version that you want to support.
 
 For a detection rule, specify the path and file and "File or folder exists" detection method:
 
-%ProgramData%\Microsoft\UpdateOS
-UpdateOS.ps1.tag
+%ProgramData%\Microsoft\UpdateOS\UpdateOS.ps1.tag
 
 Deploy the app as a required app to an appropriate set of devices.
