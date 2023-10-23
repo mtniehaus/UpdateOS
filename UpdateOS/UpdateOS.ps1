@@ -83,6 +83,9 @@ $null = Install-PackageProvider -Name NuGet -Force
 $null = Install-Module PSWindowsUpdate -Force
 Import-Module PSWindowsUpdate
 
+# Opt into Microsoft Update
+Add-WUServiceManager -ServiceID "7971f918-a847-4430-9279-4a52d1efe18d" -AddServiceFlag 7 -Confirm:$False
+
 # Install all available updates
 $ts = get-date -f "yyyy/MM/dd hh:mm:ss tt"
 Write-Host "$ts Installing updates."
