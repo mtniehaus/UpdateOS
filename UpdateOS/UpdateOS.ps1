@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.5
+.VERSION 1.6
 
 .GUID 07e4ef9f-8341-4dc4-bc73-fc277eb6b4e6
 
@@ -25,6 +25,7 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
+Version 1.6:  Default to soft reboot.
 Version 1.5:  Improved logging, reboot logic.
 Version 1.4:  Fixed reboot logic.
 Version 1.3:  Force use of Microsoft Update/WU.
@@ -45,7 +46,7 @@ This script uses the PSWindowsUpdate module to install the latest cumulative upd
 
 [CmdletBinding()]
 Param(
-    [Parameter(Mandatory=$False)] [ValidateSet('Soft', 'Hard', 'None', 'Delayed')] [String] $Reboot = 'Delayed',
+    [Parameter(Mandatory=$False)] [ValidateSet('Soft', 'Hard', 'None', 'Delayed')] [String] $Reboot = 'Soft',
     [Parameter(Mandatory=$False)] [Int32] $RebootTimeout = 120
 )
 
