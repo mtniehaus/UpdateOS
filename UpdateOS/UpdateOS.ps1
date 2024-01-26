@@ -39,7 +39,7 @@ Version 1.0:  Original published version.
 .SYNOPSIS
 Installs the latest Windows 10/11 quality updates.
 .DESCRIPTION
-This script uses the PSWindowsUpdate module to install the latest cumulative update for Windows 10/11.
+This script uses the Windows Update COM objects to install the latest cumulative updates for Windows 10/11.
 .EXAMPLE
 .\UpdateOS.ps1
 #>
