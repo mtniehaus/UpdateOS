@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.6
+.VERSION 1.8
 
 .GUID 07e4ef9f-8341-4dc4-bc73-fc277eb6b4e6
 
@@ -25,6 +25,8 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
+Version 1.8:  Added logic to pass the -ExcludeDrivers switch when relaunching as 64-bit.
+Version 1.7:  Switched to Windows Update COM objects.
 Version 1.6:  Default to soft reboot.
 Version 1.5:  Improved logging, reboot logic.
 Version 1.4:  Fixed reboot logic.
@@ -56,7 +58,11 @@ Process {
     # If we are running as a 32-bit process on an x64 system, re-launch as a 64-bit process
     if ("$env:PROCESSOR_ARCHITEW6432" -ne "ARM64") {
         if (Test-Path "$($env:WINDIR)\SysNative\WindowsPowerShell\v1.0\powershell.exe") {
-            & "$($env:WINDIR)\SysNative\WindowsPowerShell\v1.0\powershell.exe" -ExecutionPolicy bypass -NoProfile -File "$PSCommandPath" -Reboot $Reboot -RebootTimeout $RebootTimeout
+            if ($ExcludeDrivers) {
+                & "$($env:WINDIR)\SysNative\WindowsPowerShell\v1.0\powershell.exe" -ExecutionPolicy bypass -NoProfile -File "$PSCommandPath" -Reboot $Reboot -RebootTimeout $RebootTimeout -ExcludeDrivers
+            } else {
+                & "$($env:WINDIR)\SysNative\WindowsPowerShell\v1.0\powershell.exe" -ExecutionPolicy bypass -NoProfile -File "$PSCommandPath" -Reboot $Reboot -RebootTimeout $RebootTimeout
+            }
             Exit $lastexitcode
         }
     }
