@@ -25,6 +25,7 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
+Version 1.9:  Added -ExcludeUpdates switch.
 Version 1.8:  Added logic to pass the -ExcludeDrivers switch when relaunching as 64-bit.
 Version 1.7:  Switched to Windows Update COM objects.
 Version 1.6:  Default to soft reboot.
@@ -50,7 +51,8 @@ This script uses the Windows Update COM objects to install the latest cumulative
 Param(
     [Parameter(Mandatory = $False)] [ValidateSet('Soft', 'Hard', 'None', 'Delayed')] [String] $Reboot = 'Soft',
     [Parameter(Mandatory = $False)] [Int32] $RebootTimeout = 120,
-    [Parameter(Mandatory = $False)] [switch] $ExcludeDrivers
+    [Parameter(Mandatory = $False)] [switch] $ExcludeDrivers,
+    [Parameter(Mandatory = $False)] [switch] $ExcludeUpdates
 )
 
 Process {
@@ -60,6 +62,8 @@ Process {
         if (Test-Path "$($env:WINDIR)\SysNative\WindowsPowerShell\v1.0\powershell.exe") {
             if ($ExcludeDrivers) {
                 & "$($env:WINDIR)\SysNative\WindowsPowerShell\v1.0\powershell.exe" -ExecutionPolicy bypass -NoProfile -File "$PSCommandPath" -Reboot $Reboot -RebootTimeout $RebootTimeout -ExcludeDrivers
+            } elseif ($ExcludeUpdates) {
+                & "$($env:WINDIR)\SysNative\WindowsPowerShell\v1.0\powershell.exe" -ExecutionPolicy bypass -NoProfile -File "$PSCommandPath" -Reboot $Reboot -RebootTimeout $RebootTimeout -ExcludeUpdates
             } else {
                 & "$($env:WINDIR)\SysNative\WindowsPowerShell\v1.0\powershell.exe" -ExecutionPolicy bypass -NoProfile -File "$PSCommandPath" -Reboot $Reboot -RebootTimeout $RebootTimeout
             }
@@ -90,9 +94,14 @@ Process {
     $WUDownloader = (New-Object -ComObject Microsoft.Update.Session).CreateUpdateDownloader()
     $WUInstaller = (New-Object -ComObject Microsoft.Update.Session).CreateUpdateInstaller()
     if ($ExcludeDrivers) {
+        # Updates only
         $queries = @("IsInstalled=0 and Type='Software'")
     }
-    else {
+    elseif ($ExcludeUpdates) {
+        # Drivers only
+        $queries = @("IsInstalled=0 and Type='Driver'")
+    } else {
+        # Both
         $queries = @("IsInstalled=0 and Type='Software'", "IsInstalled=0 and Type='Driver'")
     }
 
