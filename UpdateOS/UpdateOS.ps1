@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.8
+.VERSION 1.10
 
 .GUID 07e4ef9f-8341-4dc4-bc73-fc277eb6b4e6
 
@@ -25,6 +25,7 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
+Version 1.10: Fixed AcceptEula logic.
 Version 1.9:  Added -ExcludeUpdates switch.
 Version 1.8:  Added logic to pass the -ExcludeDrivers switch when relaunching as 64-bit.
 Version 1.7:  Switched to Windows Update COM objects.
@@ -111,7 +112,7 @@ Process {
         $ts = get-date -f "yyyy/MM/dd hh:mm:ss tt"
         Write-Host "$ts Getting $_ updates."        
         ((New-Object -ComObject Microsoft.Update.Session).CreateupdateSearcher().Search($_)).Updates | ForEach-Object {
-            if (!$_.EulaAccepted) { $_.EulaAccepted = $true }
+            if (!$_.EulaAccepted) { $_.AcceptEula() }
             if ($_.Title -notmatch "Preview") { [void]$WUUpdates.Add($_) }
         }
 
