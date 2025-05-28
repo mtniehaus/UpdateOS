@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.10
+.VERSION 2.0
 
 .GUID 07e4ef9f-8341-4dc4-bc73-fc277eb6b4e6
 
@@ -25,6 +25,7 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
+Version 2.0:  Restructured download and install logic
 Version 1.10: Fixed AcceptEula logic.
 Version 1.9:  Added -ExcludeUpdates switch.
 Version 1.8:  Added logic to pass the -ExcludeDrivers switch when relaunching as 64-bit.
@@ -106,73 +107,86 @@ Process {
         $queries = @("IsInstalled=0 and Type='Software'", "IsInstalled=0 and Type='Driver'")
     }
 
+    $WUUpdates = New-Object -ComObject Microsoft.Update.UpdateColl
     $queries | ForEach-Object {
-
-        $WUUpdates = New-Object -ComObject Microsoft.Update.UpdateColl
         $ts = get-date -f "yyyy/MM/dd hh:mm:ss tt"
         Write-Host "$ts Getting $_ updates."        
-        ((New-Object -ComObject Microsoft.Update.Session).CreateupdateSearcher().Search($_)).Updates | ForEach-Object {
-            if (!$_.EulaAccepted) { $_.AcceptEula() }
-            if ($_.Title -notmatch "Preview") { [void]$WUUpdates.Add($_) }
-        }
-
-        if ($WUUpdates.Count -ge 1) {
-            $WUInstaller.ForceQuiet = $true
-            $WUInstaller.Updates = $WUUpdates
-            $WUDownloader.Updates = $WUUpdates
-            $UpdateCount = $WUDownloader.Updates.count
-            if ($UpdateCount -ge 1) {
-                $ts = get-date -f "yyyy/MM/dd hh:mm:ss tt"
-                Write-Output "$ts Downloading $UpdateCount Updates"
-                foreach ($update in $WUInstaller.Updates) { Write-Output "$($update.Title)" }
-                $Download = $WUDownloader.Download()
+        try {
+            ((New-Object -ComObject Microsoft.Update.Session).CreateupdateSearcher().Search($_)).Updates | ForEach-Object {
+                if (!$_.EulaAccepted) { $_.AcceptEula() }
+                if ($_.Title -notmatch "Preview") { [void]$WUUpdates.Add($_) }
             }
-            $InstallUpdateCount = $WUInstaller.Updates.count
-            if ($InstallUpdateCount -ge 1) {
-                $ts = get-date -f "yyyy/MM/dd hh:mm:ss tt"
-                Write-Output "$ts Installing $InstallUpdateCount Updates"
-                $Install = $WUInstaller.Install()
-                $ResultMeaning = ($Results | Where-Object { $_.ResultCode -eq $Install.ResultCode }).Meaning
-                Write-Output $ResultMeaning
-                $script:needReboot = $Install.RebootRequired
-            } 
+        } catch {
+            # If this script is running during specialize, error 8024004A will happen:
+            # 8024004A	Windows Update agent operations are not available while OS setup is running.
+            $ts = get-date -f "yyyy/MM/dd hh:mm:ss tt"
+            Write-Warning "$ts Unable to search for updates: $_"
         }
-        else {
-            Write-Output "No Updates Found"
-        } 
+    }
+
+    $ts = get-date -f "yyyy/MM/dd hh:mm:ss tt"
+    if ($WUUpdates.Count -eq 0) {
+        Write-Host "$ts No Updates Found"
+        Exit 0
+    } else {
+        Write-Host "$ts Updates found: $($WUUpdates.count)"
+    }
+    
+    foreach ($update in $WUUpdates) {
+    
+        $singleUpdate = New-Object -ComObject Microsoft.Update.UpdateColl
+        $singleUpdate.Add($update) | Out-Null
+    
+        $WUDownloader = (New-Object -ComObject Microsoft.Update.Session).CreateUpdateDownloader()
+        $WUDownloader.Updates = $singleUpdate
+    
+        $WUInstaller = (New-Object -ComObject Microsoft.Update.Session).CreateUpdateInstaller()
+        $WUInstaller.Updates = $singleUpdate
+        $WUInstaller.ForceQuiet = $true
+    
+        $ts = get-date -f "yyyy/MM/dd hh:mm:ss tt"
+        Write-Output "$ts Downloading update: $($update.Title)"
+        $Download = $WUDownloader.Download()
+        $ts = get-date -f "yyyy/MM/dd hh:mm:ss tt"
+        Write-Host "$ts   Download result: $($Download.ResultCode) ($($Download.HResult))"
+    
+        $ts = get-date -f "yyyy/MM/dd hh:mm:ss tt"
+        Write-Host "$ts Installing update: $($update.Title)"
+        $Results = $WUInstaller.Install()
+        $ts = get-date -f "yyyy/MM/dd hh:mm:ss tt"
+        Write-Host "$ts   Install result: $($Results.ResultCode) ($($Results.HResult))"
+
+        # result code 2 = success, see https://learn.microsoft.com/en-us/windows/win32/api/wuapi/ne-wuapi-operationresultcode
+        
+        if ($Results.RebootRequired) {
+            $script:needReboot = $true
+        }
     }
 
     # Specify return code
     $ts = get-date -f "yyyy/MM/dd hh:mm:ss tt"
     if ($script:needReboot) {
         Write-Host "$ts Windows Update indicated that a reboot is needed."
+
+        $ts = get-date -f "yyyy/MM/dd hh:mm:ss tt"
+        if ($Reboot -eq "Hard") {
+            Write-Host "$ts Exiting with return code 1641 to indicate a hard reboot is needed."
+            Stop-Transcript
+            Exit 1641
+        }
+        elseif ($Reboot -eq "Soft") {
+            Write-Host "$ts Exiting with return code 3010 to indicate a soft reboot is needed."
+            Stop-Transcript
+            Exit 3010
+        }
+        elseif ($Reboot -eq "Delayed") {
+            Write-Host "$ts Rebooting with a $RebootTimeout second delay"
+            & shutdown.exe /r /t $RebootTimeout /c "Rebooting to complete the installation of Windows updates."
+            Exit 0
+        }    
     }
     else {
         Write-Host "$ts Windows Update indicated that no reboot is required."
     }
-
-    # For whatever reason, the reboot needed flag is not always being properly set.  So we always want to force a reboot.
-    # If this script (as an app) is being used as a dependent app, then a hard reboot is needed to get the "main" app to
-    # install.
-    $ts = get-date -f "yyyy/MM/dd hh:mm:ss tt"
-    if ($Reboot -eq "Hard") {
-        Write-Host "$ts Exiting with return code 1641 to indicate a hard reboot is needed."
-        Stop-Transcript
-        Exit 1641
-    }
-    elseif ($Reboot -eq "Soft") {
-        Write-Host "$ts Exiting with return code 3010 to indicate a soft reboot is needed."
-        Stop-Transcript
-        Exit 3010
-    }
-    elseif ($Reboot -eq "Delayed") {
-        Write-Host "$ts Rebooting with a $RebootTimeout second delay"
-        & shutdown.exe /r /t $RebootTimeout /c "Rebooting to complete the installation of Windows updates."
-        Exit 0
-    }
-    else {
-        Write-Host "$ts Skipping reboot based on Reboot parameter (None)"
-        Exit 0
-    }
-
+    Exit 0
 }
