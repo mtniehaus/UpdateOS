@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 2.0
+.VERSION 2.1
 
 .GUID 07e4ef9f-8341-4dc4-bc73-fc277eb6b4e6
 
@@ -25,6 +25,7 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
+Version 2.1:  Added -Append for Start-Transcript.  Added logic to filter out feature updates.
 Version 2.0:  Restructured download and install logic
 Version 1.10: Fixed AcceptEula logic.
 Version 1.9:  Added -ExcludeUpdates switch.
@@ -80,7 +81,7 @@ Process {
     Set-Content -Path "$($env:ProgramData)\Microsoft\UpdateOS\UpdateOS.ps1.tag" -Value "Installed"
 
     # Start logging
-    Start-Transcript "$($env:ProgramData)\Microsoft\UpdateOS\UpdateOS.log"
+    Start-Transcript "$($env:ProgramData)\Microsoft\UpdateOS\UpdateOS.log" -Append
 
     # Main logic
     $script:needReboot = $false
@@ -114,7 +115,16 @@ Process {
         try {
             ((New-Object -ComObject Microsoft.Update.Session).CreateupdateSearcher().Search($_)).Updates | ForEach-Object {
                 if (!$_.EulaAccepted) { $_.AcceptEula() }
-                if ($_.Title -notmatch "Preview") { [void]$WUUpdates.Add($_) }
+                $featureUpdate = $_.Categories | Where-Object { $_.CategoryID -eq "3689BDC8-B205-4AF4-8D4A-A63924C5E9D5" }
+                if ($featureUpdate) {
+                    $ts = get-date -f "yyyy/MM/dd hh:mm:ss tt"
+                    Write-Host "$ts Skipping feature update: $($_.Title)"
+                } elseif ($_.Title -match "Preview") { 
+                    $ts = get-date -f "yyyy/MM/dd hh:mm:ss tt"
+                    Write-Host "$ts Skipping preview update: $($_.Title)"
+                } else {
+                    [void]$WUUpdates.Add($_)
+                }
             }
         } catch {
             # If this script is running during specialize, error 8024004A will happen:
@@ -157,7 +167,7 @@ Process {
         Write-Host "$ts   Install result: $($Results.ResultCode) ($($Results.HResult))"
 
         # result code 2 = success, see https://learn.microsoft.com/en-us/windows/win32/api/wuapi/ne-wuapi-operationresultcode
-        
+
         if ($Results.RebootRequired) {
             $script:needReboot = $true
         }
